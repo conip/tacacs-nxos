@@ -9,7 +9,7 @@
     password: 'Ensono$123'
 
   tasks:
-    - name: LOOKING FOR TACACS SRC INTERFACE
+    - name: LOOKING FOR TACACS SRC INTERFACEs
       cisco.nxos.nxos_command:
         commands:
           - show run tacacs
