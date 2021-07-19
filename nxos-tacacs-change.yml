@@ -44,7 +44,7 @@
 #          - test aaa group ISE user1 alamkaota
       register: var_test_result
 
-    - name: CHANGING REST OF AAA COMMANDS IF TEST OK
+    - name: CHANGING REST OF AAA COMMANDS IF TEST OK AND DOING CLEANUP
       block:
         - cisco.nxos.nxos_config:
             lines:
@@ -56,5 +56,6 @@
               - aaa authorization commands default group ISE local
               - aaa authorization config-commands console group ISE local
               - aaa authorization config-commands default group ISE local
+
       when: var_test_result.stdout | regex_search("user has been authenticated") 
 ...
