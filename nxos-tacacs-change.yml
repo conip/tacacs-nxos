@@ -1,0 +1,60 @@
+---
+- name: "NEXUS - CHANGING TACACS SETTINGS"
+  hosts: nexus
+  become: yes
+  become_method: enable
+  gather_facts: false
+  vars:
+    username: 'user1'
+    password: 'Ensono$123'
+
+  tasks:
+    - name: LOOKING FOR TACACS SRC INTERFACE
+      cisco.nxos.nxos_command:
+        commands:
+          - show run tacacs
+      register: var_result_1
+
+    - set_fact:
+        var_src_int: "{{ item | regex_search('source-interface.*') }}"
+      with_items: "{{ var_result_1.stdout_lines[0] }}"
+
+    - debug:
+        msg: "{{ var_src_int }}"
+
+
+    - name: "ADDING NEW TACACS SERVER"
+      cisco.nxos.nxos_aaa_server_host:
+        server_type: tacacs
+        key: alamakota
+        address: 192.168.101.99
+        state: present
+    
+    - name: "ADDING AAA GROUP"
+      cisco.nxos.nxos_config:
+        lines:
+          - server 192.168.101.99
+          - "{{ var_src_int }}"
+        parents: aaa group server tacacs+ ISE
+    
+    - name: "TESTING NEW ISE"
+      cisco.nxos.nxos_command:
+        commands:
+          - test aaa group ISE {{ username }} {{ password }}
+#          - test aaa group ISE user1 alamkaota
+      register: var_test_result
+
+    - name: CHANGING REST OF AAA COMMANDS IF TEST OK
+      block:
+        - cisco.nxos.nxos_config:
+            lines:
+              - aaa authentication login default fallback error local
+              - aaa authentication login default group ISE
+              - aaa authentication login console group ISE
+              - aaa accounting default group ISE
+              - aaa authorization commands console group ISE local
+              - aaa authorization commands default group ISE local
+              - aaa authorization config-commands console group ISE local
+              - aaa authorization config-commands default group ISE local
+      when: var_test_result.stdout | regex_search("user has been authenticated") 
+...
