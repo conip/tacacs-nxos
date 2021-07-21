@@ -9,6 +9,8 @@
     password: 'Ensono$123'
     var_src_int: 'none'
     var_use_vrf: 'none'
+    new_ise_local_username: 'user1'
+    new_ise_local_password: 'Ensono$123'
 
   tasks:
     - block:
@@ -73,7 +75,7 @@
     - name: "TESTING NEW ISE"
       cisco.nxos.nxos_command:
         commands:
-          - test aaa group ISE {{ username }} {{ password }}
+          - test aaa group ISE {{ new_ise_local_username }} {{ new_ise_local_password }}
 #          - test aaa group ISE user1 alamkaota
       register: var_test_result
 
