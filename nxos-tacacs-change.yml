@@ -7,22 +7,55 @@
   vars:
     username: 'user1'
     password: 'Ensono$123'
+    var_src_int: 'none'
+    var_use_vrf: 'none'
 
   tasks:
-    - name: LOOKING FOR TACACS SRC INTERFACEs
-      cisco.nxos.nxos_command:
-        commands:
-          - show run tacacs
-      register: var_result_1
+    - block:
+        - name: LOOKING FOR TACACS SRC INTERFACE OR "use-vrf" COMMAND
+          cisco.nxos.nxos_command:
+            commands:
+              - show run tacacs
+          register: var_result_1
+     
+        # ending play for single host if there are already more 'aaa group server tacacs ...' defined (we don't know which src int to use etc)
+        - block:
+            - debug:
+                msg: "STOPPING - MORE than 1 'aaa group server tacacs ...' definitions COUNT: {{ var_result_1.stdout | regex_findall('aaa group server tacacs') | length }}"
+            - meta: end_host
+          when: var_result_1.stdout | regex_findall('aaa group server tacacs') | length > 1
+        - set_fact:
+            var_src_int: "{{ item }}"
+          when: item | regex_search('source-interface.*')
+          with_items: "{{ var_result_1.stdout_lines[0] }}"
 
+        - set_fact:
+            var_use_vrf: "{{ item }}"
+          when: item | regex_search('use-vrf.*')
+          with_items: "{{ var_result_1.stdout_lines[0] }}"
+          
+
+    # - debug:
+    #     msg: "SRC_INT: {{ var_src_int }}"
+    # - debug:
+    #     msg: "USE_VRF: {{ var_use_vrf }}"
     - set_fact:
-        var_src_int: "{{ item | regex_search('source-interface.*') }}"
-      with_items: "{{ var_result_1.stdout_lines[0] }}"
+        var_src: "{{ var_use_vrf }}"
+      when:
+        - var_use_vrf != "none"
+    - set_fact:
+        var_src: "{{ var_src_int }}"
+      when:
+        - var_use_vrf == "none"
+        - var_src_int != "none"
+    - set_fact:
+        var_src: ""
+      when:
+        - var_use_vrf == "none"
+        - var_src_int == "none"        
 
-    - debug:
-        msg: "{{ var_src_int }}"
-
-
+    # - debug:
+    #     msg: "FINAL SRC: {{ var_src }}"
     - name: "ADDING NEW TACACS SERVER"
       cisco.nxos.nxos_aaa_server_host:
         server_type: tacacs
@@ -30,13 +63,13 @@
         address: 192.168.101.99
         state: present
     
-    - name: "ADDING AAA GROUP"
+    - name: "ADDING AAA GROUP NAMED 'ISE'"
       cisco.nxos.nxos_config:
         lines:
           - server 192.168.101.99
-          - "{{ var_src_int }}"
+          - "{{ var_src }}"
         parents: aaa group server tacacs+ ISE
-    
+      
     - name: "TESTING NEW ISE"
       cisco.nxos.nxos_command:
         commands:
@@ -44,13 +77,14 @@
 #          - test aaa group ISE user1 alamkaota
       register: var_test_result
 
-    - name: CHANGING REST OF AAA COMMANDS IF TEST OK AND DOING CLEANUP
+    - name: CHANGING AAA COMMANDS IF TEST OK
       block:
-        - cisco.nxos.nxos_config:
+        - name: CHANGING AAA COMMANDS IF TEST OK
+          cisco.nxos.nxos_config:
             lines:
               - aaa authentication login default fallback error local
-              - aaa authentication login default group ISE
-              - aaa authentication login console group ISE
+              - aaa authentication login default group ISE local
+              - aaa authentication login console group ISE local
               - aaa accounting default group ISE
               - aaa authorization commands console group ISE local
               - aaa authorization commands default group ISE local
