@@ -1,0 +1,10 @@
+Value AAA_GROUP_NAME (.+)
+Value List IP_ADDRESS (\d+\.\d+\.\d+\.\d+)
+
+
+Start
+ ^aaa group server tacacs\+ ${AAA_GROUP_NAME}
+ ^   \s+((?!server ).*) -> Record
+ ^\s+server ${IP_ADDRESS}
+
+ 

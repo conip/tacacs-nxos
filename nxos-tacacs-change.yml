@@ -5,12 +5,19 @@
   become_method: enable
   gather_facts: false
   vars:
-    username: 'user1'
-    password: 'Ensono$123'
+    # username: 'user1'
+    # password: 'Ensono$123'
     var_src_int: 'none'
     var_use_vrf: 'none'
     new_ise_local_username: 'user1'
     new_ise_local_password: 'Ensono$123'
+
+  vars_prompt:
+    - name: username
+      prompt: What is your username?
+      private: no
+    - name: password
+      prompt: What is your password?
 
   tasks:
     - block:

@@ -1,0 +1,12 @@
+{
+	"SERVERS_LIST": [
+{% for x in var_Server_group_temp_list %}
+		{
+			"Server_Group": "{{ x }}",
+			"Server_IP": "{{ var_Server_Address_temp_list[loop.index0] }}",
+			"Server_status": "{{ var_Server_status_temp_list[loop.index0] }}"
+		}{{ '' if loop.index == loop.length else ','}}
+{% endfor %}
+	]
+}
+

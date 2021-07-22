@@ -1,5 +1,5 @@
 ---
-- name: "NEXUS - CHANGING TACACS SETTINGS"
+- name: "NEXUS - CLEANING UP TACACS CONFIG EXCEPT NEW ISE SERVERS AND GROUPS"
   hosts: nexus
   become: yes
   become_method: enable
@@ -9,73 +9,43 @@
     password: 'Ensono$123'
 
   tasks:
-    - name: LOOKING FOR TACACS SRC INTERFACEs
+    - name: LOOKING FOR TACACS SERVER GROUPS
       cisco.nxos.nxos_command:
         commands:
           - show run tacacs
       register: var_result_1
+    
+    - name: "test"
+      set_fact:
+        var_Server_group: '{{ var_result_1.stdout | regex_findall("aaa group server tacacs. \w+") | regex_replace("aaa group server tacacs\+ ","") }}'
 
-    - set_fact:
-        var_src_int: "{{ item | regex_search('source-interface.*') }}"
-      with_items: "{{ var_result_1.stdout_lines[0] }}"
+
+    - name: PARSING
+      ansible.utils.cli_parse:
+        command: show run tacacs
+        parser:
+          name: ansible.utils.textfsm
+          template_path: "templates/nxos_show_tacacs_aaa_groups.textfsm"
+        set_fact: var_aaa_tacacs_groups
 
     - debug:
-        msg: "{{ var_src_int }}"
+        msg: "{{ var_aaa_tacacs_groups[0].AAA_GROUP_NAME }}"
 
 
-    - name: "ADDING NEW TACACS SERVER"
-      cisco.nxos.nxos_aaa_server_host:
-        server_type: tacacs
-        key: alamakota
-        address: 192.168.101.99
-        state: present
-    
-    - name: "ADDING AAA GROUP"
+    - name: REMOVING GROUPS
       cisco.nxos.nxos_config:
         lines:
-          - server 192.168.101.99
-          - "{{ var_src_int }}"
-        parents: aaa group server tacacs+ ISE
-    
-    - name: "TESTING NEW ISE"
-      cisco.nxos.nxos_command:
-        commands:
-          - test aaa group ISE {{ username }} {{ password }}
-#          - test aaa group ISE user1 alamkaota
-      register: var_test_result
+          - "no aaa group server tacacs+ {{ item.AAA_GROUP_NAME }}"
+      when: item.AAA_GROUP_NAME != "ISE "
+      with_items: '{{ var_aaa_tacacs_groups }}'
 
-    - name: CHANGING REST OF AAA COMMANDS IF TEST OK AND DOING CLEANUP
-      block:
-        - cisco.nxos.nxos_config:
-            lines:
-              - aaa authentication login default fallback error local
-              - aaa authentication login default group ISE
-              - aaa authentication login console group ISE
-              - aaa accounting default group ISE
-              - aaa authorization commands console group ISE local
-              - aaa authorization commands default group ISE local
-              - aaa authorization config-commands console group ISE local
-              - aaa authorization config-commands default group ISE local
-        - cisco.nxos.nxos_command:
-            commands:
-              - show run | inc "aaa group server"
-          register: var_aaa_group_result
-        - debug:
-            msg: "{{ var_aaa_group_result.stdout_lines}}"
-        - cisco.nxos.nxos_command:
-            commands:
-              - 'show run | section "{{ item }}"'
-          with_items:
-            - '{{ var_aaa_group_result.stdout_lines[0] | regex_replace("tacacs\+", "tacacs.") }}'
-          when: item | regex_search("aaa group server tacacs..((?!ISE).)*$")
-          register: var_result_2
+    - name: REMOVING SERVERS with INCLUDED TASK
+      include_tasks: nxos_remove_server.yml
+      when: '{{ servers_list.AAA_GROUP_NAME != "ISE " }}'
+      loop: "{{ var_aaa_tacacs_groups }}"
+      loop_control:
+        loop_var: servers_list
 
-        - debug:
-            #msg: "{{ item.msg.results[0].stdout_lines }}"
-            var: item.stdout_lines[0]
-          with_items:
-            - "{{ var_result_2.results }}"
-            #- msg: "{{ var_result_2}}"
 
-      when: var_test_result.stdout | regex_search("user has been authenticated") 
+
 ...
